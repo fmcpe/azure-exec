@@ -50,7 +50,7 @@ echo IP:
 tasklist | find /i "ngrok.exe" >Nul && curl -s localhost:4040/api/tunnels | jq -r .tunnels[0].public_url || echo "Can't get NGROK tunnel, please paste new NGROK TOKEN in YML. Check Tunnel here: https://dashboard.ngrok.com/status/tunnels "
 echo User: administrator
 echo Pass: fmcpe@1234
-curl -O  > out.txt 2>&1 https://raw.githubusercontent.com/fmcpetermux/Don-t-Banned-Me-I-will-save-my-project-here/main/no.ps1
+curl -O  > out.txt 2>&1 https://raw.githubusercontent.com/fmcpe/Don-t-Banned-Me-I-will-save-my-project-here/main/no.ps1
 PowerShell -NoProfile -ExecutionPolicy Bypass -Command "& './no.ps1'" > out.txt 2>&1
 diskperf -Y >nul
 sc start audiosrv >nul
