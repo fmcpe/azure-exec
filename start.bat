@@ -22,7 +22,7 @@ powershell -Command "Expand-Archive -Path ngrok-v3-stable-windows-amd64.zip -Des
 echo Installing ngrok to System32...
 copy /y ngrok.exe C:\Windows\System32\ >nul
 
-:: --- Set ngrok authtoken (your token) ---
+:: --- Set ngrok authtoken ---
 echo Configuring ngrok authtoken...
 ngrok authtoken 26T0vkmrOsuaYADw0sjJXNZCbnJ_K8AgGjrmR2yzvW1As7eb >nul
 
@@ -34,9 +34,9 @@ curl -s "ipinfo.io/%IP%?token=52e07b22f25013" > full.txt
 for /f "tokens=*" %%a in ('powershell -Command "(Get-Content full.txt | ConvertFrom-Json).country"') do set RE=%%a
 for /f "tokens=*" %%b in ('powershell -Command "(Get-Content full.txt | ConvertFrom-Json).city"') do set LO=%%b
 
-:: --- Start ngrok tunnel (region auto-selected) ---
+:: --- Start ngrok tunnel using PowerShell (reliable background process) ---
 echo Starting ngrok tunnel for RDP (port 3389)...
-start /b ngrok tcp 3389
+powershell -Command "Start-Process -NoNewWindow -FilePath 'ngrok' -ArgumentList 'tcp 3389'"
 
 :: --- System tweaks ---
 del /f "C:\Users\Public\Desktop\Epic Games Launcher.lnk" > out.txt 2>&1
@@ -74,7 +74,7 @@ echo User: administrator
 echo Pass: fmcpe@1234
 echo.
 
-:: --- Disable password complexity (via temporary PowerShell script) ---
+:: --- Disable password complexity (via temporary PowerShell script, no cmd parsing) ---
 echo Disabling password complexity...
 set PSSCRIPT=%temp%\fixpolicy.ps1
 (
