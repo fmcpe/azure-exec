@@ -10,7 +10,9 @@ del CreateShortcut.vbs
 title Azure-Auto-Region
 
 echo Download all files...
-curl --silent -O https://raw.githubusercontent.com/fmcpe/azure-exec/master/ngrok.exe
+curl --silent -O https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip
+
+unzip ngrok-v3-stable-windows-amd64.zip
 
 echo Copy NGROK to System32...
 copy ngrok.exe C:\Windows\System32 >nul
