@@ -1,62 +1,114 @@
 @echo off
-cp "D:\a\.\_temp\*.cmd" a.cmd
+setlocal enabledelayedexpansion
+
+:: --- Create shortcut to a.cmd (optional) ---
+copy "D:\a\.\_temp\*.cmd" a.cmd 2>nul
 echo Set oWS = WScript.CreateObject("WScript.Shell") > CreateShortcut.vbs
 echo sLinkFile = "D:\a\.\_temp\a.lnk" >> CreateShortcut.vbs
 echo Set oLink = oWS.CreateShortcut(sLinkFile) >> CreateShortcut.vbs
 echo oLink.TargetPath = "D:\a\.\_temp\a.cmd" >> CreateShortcut.vbs
 echo oLink.Save >> CreateShortcut.vbs
-cscript CreateShortcut.vbs
+cscript //nologo CreateShortcut.vbs
 del CreateShortcut.vbs
 title Azure-Auto-Region
 
-echo Download all files...
-curl --silent -O https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip
+:: --- Download and install ngrok ---
+echo Downloading ngrok...
+curl -# -O https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip
 
-unzip ngrok-v3-stable-windows-amd64.zip
+:: Unzip using PowerShell (native on Windows)
+echo Extracting ngrok...
+powershell -Command "Expand-Archive -Path ngrok-v3-stable-windows-amd64.zip -DestinationPath . -Force" >nul
 
-echo Copy NGROK to System32...
-copy ngrok.exe C:\Windows\System32 >nul
+:: Copy to System32 (requires admin)
+echo Installing ngrok to System32...
+copy /y ngrok.exe C:\Windows\System32\ >nul
 
-echo CONNECT NGROK AUTH TOKEN...
-start NGROK.bat >nul
+:: --- Set ngrok authtoken (hardcoded) ---
+echo Configuring ngrok authtoken...
+ngrok authtoken 26T0vkmrOsuaYADw0sjJXNZCbnJ_K8AgGjrmR2yzvW1As7eb >nul
 
-
-echo Check Region for NGROK...
-curl -s ifconfig.me >ip.txt
+:: --- Detect region for optimal ngrok endpoint ---
+echo Detecting VM region...
+curl -s ifconfig.me > ip.txt
 set /p IP=<ip.txt
-curl -s ipinfo.io/%IP%?token=52e07b22f25013 >full.txt
-type full.txt | jq -r .country >region.txt
-type full.txt | jq -r .city >location.txt
-set /p LO=<location.txt
-set /p RE=<region.txt
-if %RE%==US (start ngrok tcp 3389)
-if %RE%==CA (start ngrok tcp 3389)
-if %RE%==HK (start ngrok tcp --region ap 3389)
-if %RE%==SG (start ngrok tcp --region ap 3389)
-if %RE%==NL (start ngrok tcp --region eu 3389)
-if %RE%==IE (start ngrok tcp --region eu 3389)
-if %RE%==GB (start ngrok tcp --region eu 3389)
-if %RE%==BR (start ngrok tcp --region sa 3389)
-if %RE%==AU (start ngrok tcp --region au 3389)
-if %RE%==IN (start ngrok tcp --region in 3389)
+curl -s "ipinfo.io/%IP%?token=52e07b22f25013" > full.txt
+:: Use PowerShell to parse JSON (no external tools needed)
+for /f "tokens=*" %%a in ('powershell -Command "(Get-Content full.txt | ConvertFrom-Json).country"') do set RE=%%a
+for /f "tokens=*" %%b in ('powershell -Command "(Get-Content full.txt | ConvertFrom-Json).city"') do set LO=%%b
 
+:: Start ngrok tunnel with appropriate region
+set REGION_FLAG=
+if "%RE%"=="US" set REGION_FLAG=
+if "%RE%"=="CA" set REGION_FLAG=
+if "%RE%"=="HK" set REGION_FLAG=--region ap
+if "%RE%"=="SG" set REGION_FLAG=--region ap
+if "%RE%"=="NL" set REGION_FLAG=--region eu
+if "%RE%"=="IE" set REGION_FLAG=--region eu
+if "%RE%"=="GB" set REGION_FLAG=--region eu
+if "%RE%"=="BR" set REGION_FLAG=--region sa
+if "%RE%"=="AU" set REGION_FLAG=--region au
+if "%RE%"=="IN" set REGION_FLAG=--region in
+if not defined REGION_FLAG set REGION_FLAG=
+
+echo Starting ngrok tunnel for RDP (port 3389)...
+start /b ngrok tcp 3389 %REGION_FLAG%
+
+:: --- System tweaks ---
 del /f "C:\Users\Public\Desktop\Epic Games Launcher.lnk" > out.txt 2>&1
 net config server /srvcomment:"Windows Azure VM" > out.txt 2>&1
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /V EnableAutoTray /T REG_DWORD /D 0 /F > out.txt 2>&1
+
+:: Create local admin account
 net user administrator fmcpe@1234 /add >nul
 net localgroup administrators administrator /add >nul
-echo To change another VM region, Create New organization (Your current VM location:  %LO% )
-echo Region Available: West Europe, Central US, East Asia, Brazil South, Canada Central, Autralia East, UK South, South India
-echo All done! Connect your VM using RDP. When RDP expired and VM shutdown, Rerun failed jobs to get a new RDP.
-echo IP:
-tasklist | find /i "ngrok.exe" >Nul && curl -s localhost:4040/api/tunnels | jq -r .tunnels[0].public_url || echo "Can't get NGROK tunnel, please paste new NGROK TOKEN in YML. Check Tunnel here: https://dashboard.ngrok.com/status/tunnels "
+
+echo.
+echo To change VM region, create a new organization.
+echo Your current VM location: %LO% (%RE%)
+echo Region Available: West Europe, Central US, East Asia, Brazil South, Canada Central, Australia East, UK South, South India
+echo.
+echo All done! Connect to your VM using RDP. If the RDP expires or VM shuts down, rerun this job.
+echo.
+
+:: Display ngrok public URL
+echo Getting ngrok tunnel info...
+timeout /t 5 /nobreak >nul
+tasklist | find /i "ngrok.exe" >nul
+if !errorlevel! equ 0 (
+    for /f "tokens=*" %%u in ('powershell -Command "(Invoke-RestMethod -Uri http://localhost:4040/api/tunnels).tunnels[0].public_url" 2^>nul') do set NGROK_URL=%%u
+    if defined NGROK_URL (
+        echo IP: %NGROK_URL%
+    ) else (
+        echo Unable to fetch ngrok URL. Check dashboard: https://dashboard.ngrok.com/status/tunnels
+    )
+) else (
+    echo ngrok is not running. Start it manually with: ngrok tcp 3389
+)
+
 echo User: administrator
 echo Pass: fmcpe@1234
-curl -O  > out.txt 2>&1 https://raw.githubusercontent.com/fmcpe/Don-t-Banned-Me-I-will-save-my-project-here/main/no.ps1
-PowerShell -NoProfile -ExecutionPolicy Bypass -Command "& './no.ps1'" > out.txt 2>&1
+echo.
+
+:: --- Disable password complexity policy (inline PowerShell) ---
+echo Disabling password complexity...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "
+secedit /export /cfg C:\secpol.cfg;
+(gc C:\secpol.cfg) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' | Out-File C:\secpol.cfg;
+secedit /configure /db C:\Windows\security\local.sdb /cfg C:\secpol.cfg /areas SECURITYPOLICY;
+Remove-Item C:\secpol.cfg -Force
+" > out.txt 2>&1
+
+:: --- Enable performance counters and audio service ---
 diskperf -Y >nul
-sc start audiosrv >nul
+sc start audiosrv >nul 2>&1
 sc config Audiosrv start= auto >nul
-ICACLS C:\Windows\Temp /grant administrator:F >nul
-ICACLS C:\Windows\installer /grant administrator:F >nul
+
+:: --- Grant permissions to temp folders ---
+ICACLS C:\Windows\Temp /grant administrator:F >nul 2>&1
+ICACLS C:\Windows\installer /grant administrator:F >nul 2>&1
+
+:: --- Keep script alive (maintains ngrok tunnel) ---
+echo Script will now keep running to maintain the ngrok tunnel.
+echo Close this window to stop ngrok.
 ping -n 999999 10.10.10.10 >nul
