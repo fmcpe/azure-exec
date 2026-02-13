@@ -34,7 +34,7 @@ curl -s "ipinfo.io/%IP%?token=52e07b22f25013" > full.txt
 for /f "tokens=*" %%a in ('powershell -Command "(Get-Content full.txt | ConvertFrom-Json).country"') do set RE=%%a
 for /f "tokens=*" %%b in ('powershell -Command "(Get-Content full.txt | ConvertFrom-Json).city"') do set LO=%%b
 
-:: --- Start ngrok tunnel (no region flag needed) ---
+:: --- Start ngrok tunnel (region auto-selected) ---
 echo Starting ngrok tunnel for RDP (port 3389)...
 start /b ngrok tcp 3389
 
@@ -74,9 +74,17 @@ echo User: administrator
 echo Pass: fmcpe@1234
 echo.
 
-:: --- Disable password complexity (single-line PowerShell) ---
+:: --- Disable password complexity (via temporary PowerShell script) ---
 echo Disabling password complexity...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "secedit /export /cfg C:\secpol.cfg; (gc C:\secpol.cfg) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' | Out-File C:\secpol.cfg; secedit /configure /db C:\Windows\security\local.sdb /cfg C:\secpol.cfg /areas SECURITYPOLICY; Remove-Item C:\secpol.cfg -Force" > out.txt 2>&1
+set PSSCRIPT=%temp%\fixpolicy.ps1
+(
+echo secedit /export /cfg C:\secpol.cfg
+echo (gc C:\secpol.cfg) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' ^| Out-File C:\secpol.cfg
+echo secedit /configure /db C:\Windows\security\local.sdb /cfg C:\secpol.cfg /areas SECURITYPOLICY
+echo Remove-Item C:\secpol.cfg -Force
+) > "%PSSCRIPT%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PSSCRIPT%" > out.txt 2>&1
+del "%PSSCRIPT%"
 
 :: --- Enable performance counters and audio service ---
 diskperf -Y >nul
